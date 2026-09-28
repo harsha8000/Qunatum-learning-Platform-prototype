@@ -13,4 +13,4 @@ pydantic
 # is OpenAI-compatible, so this is still the `openai` package, just pointed
 # at Groq). Without this package (or without GROQ_API_KEY set), the tutor
 # automatically falls back to the built-in templated explanations.
-# openai
+openai
