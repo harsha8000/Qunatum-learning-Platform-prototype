@@ -585,6 +585,7 @@ async function runCircuit() {
   // 1) Instant: everything visual comes from the local exact simulation.
   const localPsi = QM.simulate(orderedGates);
   lastBlochVectors = QM.blochVectors(localPsi);
+  window.lastSimResult = { gates: orderedGates, bloch_vectors: lastBlochVectors }; // context for the AI tutor
   showResult(localPsi, null, orderedGates);
   setExplanation(localExplain(localPsi, orderedGates), "Built-in explanation · asking Qiskit + AI tutor…", true);
   statusEl.classList.remove("bad");
@@ -601,6 +602,7 @@ async function runCircuit() {
     if (!res.ok) throw new Error(`backend returned ${res.status}`);
     const data = await res.json();
     lastBlochVectors = data.bloch_vectors;
+    window.lastSimResult = data;
 
     const counts = Object.fromEntries(Object.entries(data.counts).map(([k, v]) => [QM.flipKey(k), v]));
     renderBars(QM.probabilities(localPsi), counts);

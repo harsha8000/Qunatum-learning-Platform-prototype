@@ -65,4 +65,7 @@ def simulate(req: CircuitRequest, backend: str = Query("qiskit", enum=list(ENGIN
 
 @app.post("/api/ask-tutor")
 def ask_tutor(req: TutorRequest):
-    return {"answer": ai_tutor.answer_question(req.question, req.context)}
+    return {"answer": ai_tutor.answer_question(
+        req.question, req.context, history=req.history, page=req.page,
+        chapter=req.chapter, progress=req.progress, focus=req.focus,
+    )}

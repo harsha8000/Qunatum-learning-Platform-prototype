@@ -178,17 +178,63 @@ def generate_explanation(gates, bloch_vectors, purities, probabilities) -> str:
         return fallback + "\n\n(AI tutor unavailable right now, so this is the built-in explanation.)"
 
 
-def answer_question(question: str, context: Optional[Dict[str, Any]]) -> str:
-    """Free-form Q&A, grounded in the last simulate() result if provided."""
+CHAT_SYSTEM = (
+    "You are a friendly quantum computing tutor inside a learning app for a complete beginner. "
+    "Answer questions about the lesson topics (states and amplitudes, the Bloch sphere, inner and tensor "
+    "products, unitary gates, entanglement, measurement) in plain, Feynman-style language: intuition first, "
+    "maths only when needed. Standard textbook facts (for example H|0> = |+>) are fine. But when you talk "
+    "about the student's own circuit, use ONLY the numbers in 'Simulator facts'; never invent or estimate one. "
+    "If they ask about their circuit and no facts are given, tell them to press Run in the Simulator first. "
+    "If a practice question is provided, use its official explanation; when the student picked a wrong answer, "
+    "be kind and explain the idea rather than just stating the answer. If they ask for a hint, do not reveal "
+    "the answer. Keep replies to 3-7 sentences. Output PLAIN TEXT only: no LaTeX, no markdown, no bullet "
+    "symbols. Write kets with Unicode, like |0⟩, |1⟩, |+⟩, |00⟩, and use ψ, α, β, √2, ⊗ directly."
+)
+
+
+def _chat_messages(question, context, history, page, chapter, progress, focus) -> List[dict]:
+    ctx = []
+    ctx.append(f"Simulator facts (outcome labels are |q0 q1>, qubit 0 on the left): {context}" if context
+               else "Simulator facts: none yet (the student has not run a circuit).")
+    if page:
+        ctx.append(f"The student is on the {page} page.")
+    if chapter:
+        ctx.append(f"Current lesson chapter: {chapter}.")
+    if progress:
+        ctx.append(f"Session quiz progress: {progress}")
+    if focus:
+        ctx.append(f"Practice question being discussed: {focus}")
+    msgs = [{"role": "system", "content": CHAT_SYSTEM + "\n\n" + "\n".join(ctx)}]
+    for h in (history or [])[-8:]:
+        role, text = h.get("role"), str(h.get("content", ""))[:1500]
+        if role in ("user", "assistant") and text:
+            msgs.append({"role": role, "content": text})
+    msgs.append({"role": "user", "content": question[:1500]})
+    return msgs
+
+
+def _offline_answer(focus: Optional[Dict[str, Any]]) -> str:
+    if focus and focus.get("explanation"):
+        pick, right = focus.get("student_pick"), focus.get("correct_answer")
+        head = ""
+        if pick and right:
+            head = "You picked the right answer. " if pick == right else f"The answer is \"{right}\". "
+        return head + focus["explanation"] + (
+            "\n\n(Built-in explanation: set GROQ_API_KEY and restart the backend to chat freely with the AI tutor.)")
+    return (
+        "The AI tutor is running in templated mode (no GROQ_API_KEY set), so it can't answer open-ended "
+        "questions yet. Set GROQ_API_KEY and restart the backend to enable chat. Meanwhile, the practice "
+        "questions on the Progress tab come with built-in explanations."
+    )
+
+
+def answer_question(question: str, context: Optional[Dict[str, Any]], history=None, page=None,
+                    chapter=None, progress=None, focus=None) -> str:
+    """Free-form chat, grounded in the last simulate() result, the current chapter and quiz progress."""
     if not _client:
-        return (
-            "The AI tutor is running in templated mode (no GROQ_API_KEY set), "
-            "so it can't answer open-ended questions yet — set GROQ_API_KEY "
-            "and restart the backend to enable this. In the meantime, run a "
-            "circuit and read the explanation under the bar chart."
-        )
+        return _offline_answer(focus)
     try:
-        return _ask_llm(_grounded_prompt(context or {}, question=question))
+        return _ask_llm(_chat_messages(question, context, history, page, chapter, progress, focus))
     except Exception as e:
         print(f"[ai_tutor] LLM call failed: {e}")
         return "Sorry, the AI tutor couldn't answer just now. Please try again in a moment."

@@ -94,6 +94,7 @@
       explain: "X makes |10⟩. SWAP exchanges the two qubits' states, so the 1 moves from qubit 0 to qubit 1: |01⟩. Both qubits are still pure and det C = 0: SWAP moves information around but can't create entanglement." },
   ];
 
+  window.CHALLENGES = CHALLENGES;
   let current = null; // { chapter, pick }
 
   function pulse(el) {
@@ -102,6 +103,7 @@
     setTimeout(() => el.classList.remove("pulse"), 3600);
   }
 
+  window.startMission = startMission;
   async function startMission(i) {
     const c = CHALLENGES[i];
     showPage("simulator");
@@ -111,7 +113,7 @@
     if (c.focus === "matrix") { openLab(true, true); sendQubitToMatrixLab(0); }
     else openLab(false);
 
-    const pick = current && current.chapter === i ? current.pick : null;
+    const pick = window.Progress && Progress.get(i) !== undefined ? Progress.get(i) : null;
     $("missionText").textContent = c.goal;
     const verdict = pick === null ? "" :
       (pick === c.answer ? `✓ You predicted "${c.options[pick]}" — correct! ` : `You predicted "${c.options[pick]}" — not quite. `);
@@ -133,16 +135,22 @@
       <div class="ch-head">Predict, then test it</div>
       <div class="ch-q">${c.q}</div>
       <div class="ch-opts">${c.options.map((o, k) => `<button type="button" data-k="${k}">${o}</button>`).join("")}</div>
-      <div class="ch-go"><button type="button">Test it in the Simulator →</button><span class="ch-lock"></span></div>`;
+      <div class="ch-go"><button type="button" class="ch-test">Test it in the Simulator →</button><button type="button" class="ch-ask">Ask AI tutor</button><span class="ch-lock"></span></div>`;
     host.parentNode.insertBefore(box, host);
+    const commit = (k) => {
+      current = { chapter: i, pick: k };
+      box.classList.add("committed");
+      box.querySelectorAll(".ch-opts button").forEach((x) => { x.disabled = true; x.classList.toggle("picked", +x.dataset.k === k); });
+      box.querySelector(".ch-lock").textContent = `You predicted: ${c.options[k]}. No peeking. Run it and see.`;
+    };
     box.querySelector(".ch-opts").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b || box.classList.contains("committed")) return;
       const k = +b.dataset.k;
-      current = { chapter: i, pick: k };
-      box.classList.add("committed");
-      box.querySelectorAll(".ch-opts button").forEach((x) => { x.disabled = true; x.classList.toggle("picked", x === b); });
-      box.querySelector(".ch-lock").textContent = `You predicted: ${c.options[k]}. No peeking. Run it and see.`;
+      if (window.Progress) Progress.answer(i, k);
+      commit(k);
     });
-    box.querySelector(".ch-go button").addEventListener("click", () => startMission(i));
+    if (window.Progress && Progress.get(i) !== undefined) commit(Progress.get(i)); // remembered for this session
+    box.querySelector(".ch-test").addEventListener("click", () => startMission(i));
+    box.querySelector(".ch-ask").addEventListener("click", () => window.Tutor && Tutor.ask(i));
   };
 })();

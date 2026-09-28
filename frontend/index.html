@@ -12,6 +12,7 @@
   <span class="brand"><i class="brand-mark" aria-hidden="true"></i>Egreen Quanta</span>
   <button class="nav-btn" id="nav-lessons">Lessons</button>
   <button class="nav-btn" id="nav-simulator">Simulator</button>
+  <button class="nav-btn" id="nav-progress">Progress <span class="nav-badge" id="progBadge"></span></button>
   <span class="spacer"></span>
   <span class="key-status" id="keyStatus">checking backend…</span>
 </nav>
@@ -22,6 +23,11 @@
     <div class="chapter-list" id="chapterList"></div>
     <div class="lesson-content" id="lessonContent"></div>
   </div>
+</section>
+
+<!-- ======================= PROGRESS PAGE ======================= -->
+<section id="page-progress" class="app-page">
+  <div class="progress-shell" id="progressHost"></div>
 </section>
 
 <!-- ======================= SIMULATOR PAGE ======================= -->
@@ -242,6 +248,8 @@
 <script src="js/circuit-builder.js"></script>
 <script src="js/matrix-lab.js"></script>
 <script src="js/missions.js"></script>
+<script src="js/progress.js"></script>
+<script src="js/tutor.js"></script>
 <script src="js/lessons.js"></script>
 <script src="js/nav.js"></script>
 </body>

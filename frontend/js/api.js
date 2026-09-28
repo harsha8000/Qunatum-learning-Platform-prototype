@@ -27,11 +27,11 @@ window.EntangleAPI = {
 
   // Free-form question to the AI tutor, grounded in whatever circuit result
   // (from simulate()) is passed in as `context` — see backend/ai_tutor.py.
-  async askTutor(question, context) {
+  async askTutor(question, context, extra = {}) {
     const res = await fetch(`${API_BASE}/api/ask-tutor`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, context }),
+      body: JSON.stringify({ question, context, ...extra }),
     });
     if (!res.ok) throw new Error(`askTutor() failed: ${res.status}`);
     return res.json();

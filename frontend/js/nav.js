@@ -10,11 +10,14 @@ function showPage(name) {
   document.getElementById(`nav-${name}`).classList.add("active");
   // the board's CNOT connector lines are measured from layout, so redraw once it is visible
   if (name === "simulator" && typeof drawConnectors === "function") drawConnectors();
+  if (name === "progress" && window.Progress) Progress.render();
+  if (window.Tutor) Tutor.refresh();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("nav-lessons").addEventListener("click", () => showPage("lessons"));
   document.getElementById("nav-simulator").addEventListener("click", () => showPage("simulator"));
+  document.getElementById("nav-progress").addEventListener("click", () => showPage("progress"));
 
   initLessons();      // lessons.js
   buildRows();         // circuit-builder.js
