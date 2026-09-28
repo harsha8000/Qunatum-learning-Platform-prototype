@@ -284,7 +284,7 @@ const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
    arrow with a red head, plus the θ / Φ angle arcs and the grey projection lines.
    Every colour lives in BLOCH_THEME so the whole look can be re-skinned in one place. */
 const BLOCH_THEME = {
-  panel: "#fbf8f1",                      // canvas background (matches the page's paper)
+  panel: "#f7f8fc",                      // canvas background (matches the page's paper)
   ink: "#1f1d18",                        // label text
   shell: [0.66, 0.74, 0.70],             // glass tint (r,g,b 0..1)
   grid: 0xa9b3a8, disc: 0x9aa398, equator: 0x86907f,
@@ -324,8 +324,19 @@ function makeBlochScene(canvasId) {
   const T = BLOCH_THEME;
   const canvas = document.getElementById(canvasId);
   canvas.style.background = T.panel;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(3, Math.max(2, window.devicePixelRatio || 1)));
+  let renderer;
+  try {
+    if (typeof THREE === "undefined") throw new Error("three.js did not load");
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  } catch (err) {   // no WebGL / CDN blocked: degrade gracefully instead of breaking the whole page
+    console.warn("Bloch sphere disabled:", err);
+    const note = document.createElement("div");
+    note.textContent = "3D Bloch sphere isn't available on this device (WebGL is off or blocked). The coordinates below still update.";
+    note.style.cssText = "max-width:250px;margin:0 auto;padding:1rem;font-size:.8rem;line-height:1.4;opacity:.75;text-align:center";
+    canvas.replaceWith(note);
+    return { setVector() {} };
+  }
+  renderer.setPixelRatio(Math.min(2.5, Math.max(2, window.devicePixelRatio || 1)));
   renderer.setSize(BLOCH_PX, BLOCH_PX, false);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);   // narrow FOV = near-orthographic, like a textbook figure
@@ -407,20 +418,32 @@ function makeBlochScene(canvasId) {
   // drag to rotate
   let drag = null;
   canvas.style.cursor = "grab";
+  canvas.style.touchAction = "pan-y";
   canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener("pointermove", (e) => {
     if (!drag) return;
     group.rotation.y += (e.clientX - drag.x) * 0.01;
     group.rotation.x = Math.max(-1.2, Math.min(1.2, group.rotation.x + (e.clientY - drag.y) * 0.01));
     drag = { x: e.clientX, y: e.clientY };
+    dirty = true;
   });
   canvas.addEventListener("pointerup", () => { drag = null; });
+  canvas.addEventListener("pointercancel", () => { drag = null; });
 
-  function render() { renderer.render(scene, camera); requestAnimationFrame(render); }
+  // draw only when something changed (saves battery on phones); survive WebGL context loss when the tab is backgrounded
+  let dirty = true;
+  canvas.addEventListener("webglcontextlost", (e) => e.preventDefault());
+  canvas.addEventListener("webglcontextrestored", () => { dirty = true; });
+  document.addEventListener("visibilitychange", () => { dirty = true; });
+  function render() {
+    if (dirty && !document.hidden) { renderer.render(scene, camera); dirty = false; }
+    requestAnimationFrame(render);
+  }
   render();
 
   return {
     setVector(x, y, z) {
+      dirty = true;
       clearDyn();
       const v = toScene(x, y, z);
       const len = v.length();
@@ -588,8 +611,8 @@ async function runCircuit() {
 
     const check = QM.verifyAgainstBackend(orderedGates, data);
     statusEl.textContent = check.ok
-      ? "✓ Verified: Qiskit matches this site's own math (±1e-6)."
-      : "⚠ Qiskit and the local math disagree: " + check.problems.join("; ");
+      ? "Verified: Qiskit matches this site's own math (±1e-6)."
+      : "Qiskit and the local math disagree: " + check.problems.join("; ");
     statusEl.classList.toggle("bad", !check.ok);
   } catch (err) {
     const why = err.name === "AbortError" ? "took too long" : err.message;

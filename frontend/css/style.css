@@ -225,7 +225,7 @@ input[type=range], input[type=checkbox] { accent-color: var(--accent); }
 .sphere-pair { display: flex; gap: 12px; justify-content: space-around; flex-wrap: wrap; }
 .sphere-card { text-align: center; }
 .sphere-card h3 { margin: 0 0 4px; }
-.sphere-card canvas { display: block; margin: 0 auto; width: 250px; height: 250px; border: 1px solid var(--line); border-radius: 4px; }
+.sphere-card canvas { display: block; margin: 0 auto; width: min(250px, 80vw); height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 4px; }
 .sphere-card .coords { margin-top: 4px; font-family: var(--mono); font-size: .68rem; line-height: 1.5; color: var(--ink-2); }
 .matrixlab-link { margin-top: 2px; background: none; border: 0; padding: 3px 6px; font-size: .78rem; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .matrixlab-link:hover:not(:disabled) { background: none; color: var(--accent-2); }
