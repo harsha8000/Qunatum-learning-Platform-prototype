@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Egreen Quanta · Learn &amp; Simulate</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="brand"><i class="brand-mark" aria-hidden="true"></i>Egreen Quanta</span>
+  <button class="nav-btn" id="nav-lessons">Lessons</button>
+  <button class="nav-btn" id="nav-simulator">Simulator</button>
+  <span class="spacer"></span>
+  <span class="key-status" id="keyStatus">checking backend…</span>
+</nav>
+
+<!-- ======================= LESSONS PAGE ======================= -->
+<section id="page-lessons" class="app-page">
+  <div class="lessons-shell">
+    <div class="chapter-list" id="chapterList"></div>
+    <div class="lesson-content" id="lessonContent"></div>
+  </div>
+</section>
+
+<!-- ======================= SIMULATOR PAGE ======================= -->
+<!-- Circuit builder + Matrix Lab live on the same page, both mounted and
+     animating at once — no tab switch needed to get from one to the other. -->
+<section id="page-simulator" class="app-page">
+  <div class="simulator-shell">
+
+    <div class="mission-bar" id="missionBar" hidden>
+      <div class="mission-main">
+        <span class="mission-tag">MISSION</span>
+        <span id="missionText"></span>
+      </div>
+      <div class="mission-actions">
+        <button type="button" id="missionReveal">Show answer</button>
+        <button type="button" id="missionBack">← Back to lesson</button>
+        <button type="button" id="missionClose" aria-label="Dismiss">✕</button>
+      </div>
+      <div class="mission-answer" id="missionAnswer" hidden></div>
+    </div>
+
+    <div class="sim-grid">
+      <!-- LEFT: build + look -->
+      <div class="sim-left">
+        <div class="card compact">
+          <div class="toolbar">
+            <div class="palette-groups">
+              <div class="pgroup">
+                <span class="pg-label">One qubit</span>
+                <div class="palette">
+                  <div class="gate-chip H" draggable="true" data-gate="H" title="Hadamard: turns |0⟩ into an equal mix of |0⟩ and |1⟩">H</div>
+                  <div class="gate-chip X" draggable="true" data-gate="X" title="X (NOT): flips 0↔1, a half turn about the x axis">X</div>
+                  <div class="gate-chip Y" draggable="true" data-gate="Y" title="Y: half turn about the y axis (flips 0↔1 and adds a phase)">Y</div>
+                  <div class="gate-chip Z" draggable="true" data-gate="Z" title="Z: flips the sign of |1⟩, a half turn about the z axis">Z</div>
+                  <div class="gate-chip S" draggable="true" data-gate="S" title="S: quarter turn about z (phase of i on |1⟩)">S</div>
+                  <div class="gate-chip Sdg" draggable="true" data-gate="Sdg" title="S†: undoes S, quarter turn the other way">S†</div>
+                  <div class="gate-chip T" draggable="true" data-gate="T" title="T: eighth of a turn about z (phase of e^(iπ/4) on |1⟩)">T</div>
+                  <div class="gate-chip Tdg" draggable="true" data-gate="Tdg" title="T†: undoes T">T†</div>
+                  <div class="gate-chip SX" draggable="true" data-gate="SX" title="√X: quarter turn about x. Two of them make an X">√X</div>
+                </div>
+              </div>
+              <div class="pgroup">
+                <span class="pg-label">Two qubits</span>
+                <div class="palette">
+                  <div class="gate-chip CNOT" draggable="true" data-gate="CNOT" title="CNOT: flips the target if the control is 1">CNOT</div>
+                  <div class="gate-chip CZ" draggable="true" data-gate="CZ" title="CZ: flips the sign of |11⟩ (symmetric: no control or target)">CZ</div>
+                  <div class="gate-chip SWAP" draggable="true" data-gate="SWAP" title="SWAP: exchanges the two qubits' states">SWAP</div>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button id="runBtn">▶ Run</button>
+              <button id="clearBtn">Clear</button>
+              <button id="hintBtn" class="ghost" type="button" title="How to use the board">?</button>
+            </div>
+          </div>
+          <div class="palette-hint" id="paletteHint" hidden>Drag a gate onto a wire. Two-qubit gates take a whole column: drop CNOT on the wire you want as the <strong>control</strong> and the other wire becomes the target. CZ and SWAP are symmetric, so either wire works. Click a placed gate to remove it. Hover a gate to see what it does.</div>
+          <div class="board-wrap"><div class="board" id="board">
+            <svg class="wire-svg" id="wireSvg"></svg>
+            <div class="qrow" id="row0"><div class="qlabel">Qubit 0</div></div>
+            <div class="qrow" id="row1"><div class="qlabel">Qubit 1</div></div>
+          </div></div>
+          <div class="status" id="status">Backend: not checked yet</div>
+        </div>
+
+        <div class="card compact">
+          <div class="sphere-pair">
+            <div class="sphere-card">
+              <h3>Qubit 0</h3>
+              <canvas id="sphere0"></canvas>
+              <div class="coords" id="coords0"></div>
+              <button class="matrixlab-link" id="viewMatrix0" type="button">Open in Matrix Lab ↓</button>
+            </div>
+            <div class="sphere-card">
+              <h3>Qubit 1</h3>
+              <canvas id="sphere1"></canvas>
+              <div class="coords" id="coords1"></div>
+              <button class="matrixlab-link" id="viewMatrix1" type="button">Open in Matrix Lab ↓</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: numbers, one tab open at a time -->
+      <div class="sim-right">
+        <div class="card compact">
+          <h3>Outcome probabilities</h3>
+          <div class="bars" id="bars"></div>
+        </div>
+        <div class="card compact">
+          <div class="seg tabs-seg" id="simTabs" role="tablist" hidden>
+            <button type="button" data-tab="explain" class="active">Explain</button>
+            <button type="button" data-tab="corr" hidden>Entanglement</button>
+          </div>
+          <div class="tab-pane" id="tab-explain">
+            <div id="explanation">Press Run to get an explanation of your circuit.</div>
+            <div class="tutor-src" id="tutorSrc"></div>
+          </div>
+          <div class="tab-pane" id="tab-corr" hidden>
+            <div id="corrPanel"></div>
+            <p class="card-note">Left: the state as a grid of amplitudes. Right: how much the qubits' X/Y/Z results agree (+1 always, −1 never).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Matrix Lab: closed until asked for -->
+    <div class="lab-toggle-row">
+      <button type="button" id="labToggle" class="lab-toggle" aria-expanded="false">Matrix Lab <span>— see the matrix behind a gate (advanced)</span> <b id="labChevron">▸</b></button>
+    </div>
+    <div id="matrixWrap" hidden>
+    <div id="page-matrix" class="active">
+      <div class="lab-layout mode-3d" id="labLayout">
+        <div class="lab-stage-col">
+          <div class="lab-stage" id="labStage">
+            <canvas id="matrixCanvas"></canvas>
+            <div id="labLabels"></div>
+            <div class="stage-overlay stage-tl">
+              <div class="seg" role="group" aria-label="Dimension">
+                <button id="modeBtn2D" type="button">2D Plane</button>
+                <button id="modeBtn3D" type="button" class="active">3D Space</button>
+              </div>
+            </div>
+            <div class="stage-overlay stage-tr"><button class="chip-btn" id="resetViewBtn" type="button">Reset view</button></div>
+            <div class="stage-overlay stage-bl legend" id="labLegend"></div>
+            <div class="stage-overlay stage-br stage-hint" id="labHint"></div>
+          </div>
+        </div>
+
+        <div class="lab-controls">
+          <div class="card">
+            <h3>Matrix M</h3>
+            <div class="sync-banner" id="syncBanner" hidden>
+              <span id="syncBannerText"></span>
+              <button id="syncClearBtn" type="button">Clear</button>
+            </div>
+            <div class="matrix-grid" id="matrixGrid"></div>
+            <p class="card-note">Each column is where a basis arrow lands: column 1 is where x̂ goes, column 2 where ŷ goes, column 3 where ẑ goes.</p>
+            <div class="preset-row" id="presetRow"></div>
+            <div class="apply-gate-row" id="applyGateRow" hidden>
+              <span>This matrix matches the <strong id="applyGateName"></strong> gate —</span>
+              <select id="applyGateQubit" aria-label="Qubit to add the gate to">
+                <option value="0">Qubit 0</option>
+                <option value="1">Qubit 1</option>
+              </select>
+              <button id="applyGateBtn" type="button">Add to circuit</button>
+            </div>
+          </div>
+
+          <details class="card fold">
+            <summary>Vector v</summary>
+            <div class="vector-controls" id="vectorControls"></div>
+          </details>
+
+          <div class="card">
+            <h3>Transformation</h3>
+            <div class="ctl-inline">
+              <button class="play-btn" id="playBtn" type="button">▶ Play</button>
+              <input type="range" id="morphRange" min="0" max="1" step="0.01" value="1" aria-label="Morph from identity to M" style="flex:1; accent-color: var(--accent);" />
+              <output id="morphOut" style="font-family: var(--mono); font-size:0.78rem; width:38px; text-align:right;">1.00</output>
+            </div>
+            <div class="seg vm-seg" id="viewModeToggle" role="group" aria-label="What moves">
+              <button type="button" data-vm="vector" class="active" title="Axes stay put; only the result vector Mv moves">Vector moves</button>
+              <button type="button" data-vm="space" title="The whole grid warps along with the vector">Space moves</button>
+            </div>
+            <p class="card-note" id="vmNote">Axes stay fixed. Only the result arrow Mv moves — this is the view used on the Bloch sphere.</p>
+
+          </div>
+
+          <details class="card fold"><summary>Display options</summary>
+            <div class="check-grid">
+              <label><input type="checkbox" id="optGrid" /> Warped grid</label>
+              <label><input type="checkbox" id="optBasis" /> Basis arrows</label>
+              <label><input type="checkbox" id="optCell" /> <span id="optCellLbl">Unit cell</span></label>
+              <label><input type="checkbox" id="optBox" /> Projection box</label>
+            </div>
+          </details>
+          <details class="card fold only-3d">
+            <summary>Camera</summary>
+            <div class="view-chips" id="viewChips">
+              <button class="preset-chip" type="button" data-view="iso">Isometric</button>
+              <button class="preset-chip" type="button" data-view="top">Top</button>
+              <button class="preset-chip" type="button" data-view="front">Front</button>
+              <button class="preset-chip" type="button" data-view="side">Side</button>
+            </div>
+            <div class="ctl-row"><span>Azimuth</span><input type="range" id="camAz" min="0" max="360" step="1" /><output id="camAzOut"></output></div>
+            <div class="ctl-row"><span>Elevation</span><input type="range" id="camEl" min="-89" max="89" step="1" /><output id="camElOut"></output></div>
+            <div class="ctl-row"><span>Distance</span><input type="range" id="camDist" min="4" max="28" step="0.5" /><output id="camDistOut"></output></div>
+            <label class="ctl-inline" style="font-size:0.82rem;"><input type="checkbox" id="autoRot" /> Auto-rotate</label>
+          </details>
+
+          <details class="card fold">
+            <summary>Result (numbers)</summary>
+            <div class="readouts">
+              <div class="ro-row"><span class="lbl">v</span><span id="roV"></span></div>
+              <div class="ro-row"><span class="lbl">Mv</span><span class="out" id="roMv"></span></div>
+              <div class="ro-row"><span class="lbl">|v|</span><span id="roLenV"></span><span class="lbl">|Mv|</span><span class="out" id="roLenMv"></span></div>
+              <div class="ro-row"><span class="lbl" id="roDetLbl">det</span><span id="roDet"></span></div>
+              <div class="ro-row"><span class="lbl" style="color:#83c167;">Mx̂</span><span id="roCol0"></span></div>
+              <div class="ro-row"><span class="lbl" style="color:#fc6255;">Mŷ</span><span id="roCol1"></span></div>
+              <div class="ro-row only-3d"><span class="lbl" style="color:#58c4dd;">Mẑ</span><span id="roCol2"></span></div>
+            </div>
+            <p class="ro-note" id="roNote"></p>
+            <p class="ro-morph" id="roMorph" hidden></p>
+          </details>
+        </div>
+      </div>
+    </div>
+    </div>
+
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/api.js"></script>
+<script src="js/qmath.js"></script>
+<script src="js/correlation.js"></script>
+<script src="js/circuit-builder.js"></script>
+<script src="js/matrix-lab.js"></script>
+<script src="js/missions.js"></script>
+<script src="js/lessons.js"></script>
+<script src="js/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+qiskit
+numpy
+pydantic
+
+# Optional — enable multi-backend "same circuit, any engine" comparisons.
+# Leave commented out if you only want Qiskit; the app runs fine without them.
+# cirq
+# pennylane
+
+# Optional — enables the real, LLM-grounded AI tutor via Groq (Groq's API
+# is OpenAI-compatible, so this is still the `openai` package, just pointed
+# at Groq). Without this package (or without GROQ_API_KEY set), the tutor
+# automatically falls back to the built-in templated explanations.
+# openai

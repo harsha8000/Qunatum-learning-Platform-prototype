@@ -1,0 +1,44 @@
+/* =========================================================================
+   api.js — single place the frontend talks to the backend from.
+   Every other module calls window.EntangleAPI.* rather than fetch() directly,
+   so swapping hosts, adding auth headers, or mocking the backend for a demo
+   only ever means editing this one file.
+   ========================================================================= */
+const API_BASE = "http://localhost:8000";
+
+window.EntangleAPI = {
+  BASE: API_BASE,
+
+  async simulate(gates, shots = 200, backend = "qiskit") {
+    const res = await fetch(`${API_BASE}/api/simulate?backend=${backend}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gates, shots }),
+    });
+    if (!res.ok) throw new Error(`simulate() failed: ${res.status}`);
+    return res.json();
+  },
+
+  async getLessons() {
+    const res = await fetch(`${API_BASE}/api/lessons`);
+    if (!res.ok) throw new Error(`getLessons() failed: ${res.status}`);
+    return res.json();
+  },
+
+  // Free-form question to the AI tutor, grounded in whatever circuit result
+  // (from simulate()) is passed in as `context` — see backend/ai_tutor.py.
+  async askTutor(question, context) {
+    const res = await fetch(`${API_BASE}/api/ask-tutor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, context }),
+    });
+    if (!res.ok) throw new Error(`askTutor() failed: ${res.status}`);
+    return res.json();
+  },
+
+  async health() {
+    const res = await fetch(`${API_BASE}/`);
+    return res.json();
+  },
+};
