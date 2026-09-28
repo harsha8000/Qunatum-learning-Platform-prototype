@@ -4,7 +4,7 @@
    so swapping hosts, adding auth headers, or mocking the backend for a demo
    only ever means editing this one file.
    ========================================================================= */
-const API_BASE = "https://qunatum-learning-platform-prototype.onrender.com";
+const API_BASE = "https://qunatum-learning-platform-prototype-api.onrender.com";
 
 window.EntangleAPI = {
   BASE: API_BASE,
