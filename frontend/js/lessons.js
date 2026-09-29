@@ -262,6 +262,7 @@ function renderChapterList() {
 
 function showChapter(i) {
   currentChapter = i;
+  if (window.Tutor) Tutor.invalidate("lessons"); // stale suggestions once the chapter changes
   const ch = LESSONS[i];
   // the old plain-text "Try it" notes are replaced by the interactive challenge card
   const body = ch.body.replace(/<div class="try-it">[\s\S]*?<\/div>/, "");

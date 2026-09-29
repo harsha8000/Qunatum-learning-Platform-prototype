@@ -30,3 +30,10 @@ class TutorRequest(BaseModel):
     chapter: Optional[str] = None    # title of the lesson chapter being read
     progress: Optional[Dict[str, Any]] = None  # session quiz summary
     focus: Optional[Dict[str, Any]] = None     # the practice question being discussed
+
+
+class SuggestRequest(BaseModel):
+    context: Optional[Dict[str, Any]] = None   # last /api/simulate response, if any
+    page: Optional[str] = None                 # lessons | simulator | progress
+    chapter: Optional[str] = None              # title of the lesson chapter being read
+    progress: Optional[Dict[str, Any]] = None  # session quiz summary

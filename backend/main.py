@@ -69,3 +69,10 @@ def ask_tutor(req: TutorRequest):
         req.question, req.context, history=req.history, page=req.page,
         chapter=req.chapter, progress=req.progress, focus=req.focus,
     )}
+
+
+@app.post("/api/suggest-questions")
+def suggest_questions(req: models.SuggestRequest):
+    return {"questions": ai_tutor.suggest_questions(
+        req.context, page=req.page, chapter=req.chapter, progress=req.progress,
+    )}

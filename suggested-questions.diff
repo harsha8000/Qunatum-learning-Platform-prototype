@@ -1,0 +1,282 @@
+diff --git a/backend/ai_tutor.py b/backend/ai_tutor.py
+index 085f123..f167786 100644
+--- a/backend/ai_tutor.py
++++ b/backend/ai_tutor.py
+@@ -213,6 +213,75 @@ def _chat_messages(question, context, history, page, chapter, progress, focus) -
+     return msgs
+ 
+ 
++SUGGEST_SYSTEM = (
++    "You suggest short follow-up questions a beginner could ask a quantum computing tutor chat, based on "
++    "what they are doing right now in a learning app. Return EXACTLY 3 questions, each under 12 words, in "
++    "the student's own voice (\"Why...\", \"What if...\", \"How does...\"). Prefer questions grounded in the "
++    "specific facts given (their circuit's real numbers, chapter, or wrong quiz answers) over generic ones. "
++    "Do not repeat a question already listed as asked. Output ONLY the 3 questions, one per line, no "
++    "numbering, no quotes, no extra text."
++)
++
++
++def _suggest_prompt(context, page, chapter, progress) -> str:
++    lines = []
++    if context:
++        lines.append(f"The student's last simulator run: {context}")
++    if page:
++        lines.append(f"They are currently on the {page} page.")
++    if chapter:
++        lines.append(f"Current lesson chapter: {chapter}.")
++    if progress and progress.get("results"):
++        wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
++        unanswered = [r["chapter"] for r in progress["results"] if not r.get("answered")]
++        if wrong:
++            lines.append(f"They got these practice questions wrong: {', '.join(wrong)}.")
++        if unanswered:
++            lines.append(f"Not yet attempted: {', '.join(unanswered)}.")
++    if not lines:
++        lines.append("They have just opened the app and haven't done anything yet.")
++    return "\n".join(lines)
++
++
++def _fallback_suggestions(context, page, chapter, progress) -> List[str]:
++    """No API key (or the call failed): simple rule-based suggestions, still personalized."""
++    out = []
++    if progress and progress.get("results"):
++        wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
++        if wrong:
++            out.append(f"Can you explain \"{wrong[0]}\" again, more simply?")
++        unanswered = [r["chapter"] for r in progress["results"] if not r.get("answered")]
++        if unanswered:
++            out.append(f"Give me a hint for \"{unanswered[0]}\"")
++    if context and context.get("gates"):
++        out.append("Why does my circuit give these results?")
++    if chapter:
++        out.append(f"Give me an everyday analogy for {chapter}")
++    out += ["What should I learn next?", "How is this used in real quantum computers?", "Quiz me on what I've learned so far"]
++    seen, uniq = set(), []
++    for q in out:
++        if q not in seen:
++            seen.add(q); uniq.append(q)
++    return uniq[:3]
++
++
++def suggest_questions(context, page=None, chapter=None, progress=None) -> List[str]:
++    """3 short, personalized follow-up questions for the chat panel and the Progress page."""
++    fallback = _fallback_suggestions(context, page, chapter, progress)
++    if not _client:
++        return fallback
++    try:
++        text = _ask_llm([
++            {"role": "system", "content": SUGGEST_SYSTEM},
++            {"role": "user", "content": _suggest_prompt(context, page, chapter, progress)},
++        ])
++        qs = [q.strip(" -*0123456789.\t") for q in text.splitlines() if q.strip()]
++        return qs[:3] if len(qs) >= 2 else fallback
++    except Exception as e:
++        print(f"[ai_tutor] suggest_questions failed: {e}")
++        return fallback
++
++
+ def _offline_answer(focus: Optional[Dict[str, Any]]) -> str:
+     if focus and focus.get("explanation"):
+         pick, right = focus.get("student_pick"), focus.get("correct_answer")
+diff --git a/backend/main.py b/backend/main.py
+index 8ead38f..e61f8c8 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -69,3 +69,10 @@ def ask_tutor(req: TutorRequest):
+         req.question, req.context, history=req.history, page=req.page,
+         chapter=req.chapter, progress=req.progress, focus=req.focus,
+     )}
++
++
++@app.post("/api/suggest-questions")
++def suggest_questions(req: models.SuggestRequest):
++    return {"questions": ai_tutor.suggest_questions(
++        req.context, page=req.page, chapter=req.chapter, progress=req.progress,
++    )}
+diff --git a/backend/models.py b/backend/models.py
+index a2ab1ef..7889f4f 100644
+--- a/backend/models.py
++++ b/backend/models.py
+@@ -30,3 +30,10 @@ class TutorRequest(BaseModel):
+     chapter: Optional[str] = None    # title of the lesson chapter being read
+     progress: Optional[Dict[str, Any]] = None  # session quiz summary
+     focus: Optional[Dict[str, Any]] = None     # the practice question being discussed
++
++
++class SuggestRequest(BaseModel):
++    context: Optional[Dict[str, Any]] = None   # last /api/simulate response, if any
++    page: Optional[str] = None                 # lessons | simulator | progress
++    chapter: Optional[str] = None              # title of the lesson chapter being read
++    progress: Optional[Dict[str, Any]] = None  # session quiz summary
+diff --git a/frontend/css/style.css b/frontend/css/style.css
+index 09c72d0..b24f223 100644
+--- a/frontend/css/style.css
++++ b/frontend/css/style.css
+@@ -398,3 +398,10 @@ details.fold[open] > summary { margin-bottom: 8px; }
+ .tutor-input textarea { flex: 1; resize: none; font: inherit; font-size: .88rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line-strong); border-radius: 4px; padding: 6px 8px; }
+ .tutor-input button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+ @media (max-width: 640px) { .tutor-panel { right: 6px; bottom: 6px; height: 80vh; } .prog-head { flex-direction: column; } .prog-score { text-align: left; } }
++
++/* ---------- "Suggested for you" (Progress page) ---------- */
++.prog-suggested { margin: 4px 0 18px; }
++.prog-suggested-label { font-family: var(--mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
++.prog-suggested-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
++.prog-suggested-chips button { font-size: .82rem; padding: 5px 12px; border-radius: 14px; border-color: var(--accent); color: var(--accent); background: var(--card); }
++.prog-suggested-chips button:hover:not(:disabled) { background: rgba(31,92,74,.1); }
+diff --git a/frontend/js/api.js b/frontend/js/api.js
+index 2b249d3..9bd9de9 100644
+--- a/frontend/js/api.js
++++ b/frontend/js/api.js
+@@ -33,7 +33,18 @@ window.EntangleAPI = {
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ question, context, ...extra }),
+     });
+-    if (!res.ok) throw new Error(`askTutor() failed: ${res.status}`);
++    if (!res.ok) throw new Error("ask-tutor failed");
++    return res.json();
++  },
++
++  /** 3 short, personalized follow-up questions for the current context. */
++  async suggestQuestions(context, extra = {}) {
++    const res = await fetch(`${API_BASE}/api/suggest-questions`, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ context, ...extra }),
++    });
++    if (!res.ok) throw new Error(`suggestQuestions() failed: ${res.status}`);
+     return res.json();
+   },
+ 
+diff --git a/frontend/js/circuit-builder.js b/frontend/js/circuit-builder.js
+index fc42075..d299ea0 100644
+--- a/frontend/js/circuit-builder.js
++++ b/frontend/js/circuit-builder.js
+@@ -603,6 +603,7 @@ async function runCircuit() {
+     const data = await res.json();
+     lastBlochVectors = data.bloch_vectors;
+     window.lastSimResult = data;
++    if (window.Tutor) Tutor.invalidate("simulator"); // stale suggestions after a new run
+ 
+     const counts = Object.fromEntries(Object.entries(data.counts).map(([k, v]) => [QM.flipKey(k), v]));
+     renderBars(QM.probabilities(localPsi), counts);
+diff --git a/frontend/js/lessons.js b/frontend/js/lessons.js
+index 13330be..52fc920 100644
+--- a/frontend/js/lessons.js
++++ b/frontend/js/lessons.js
+@@ -262,6 +262,7 @@ function renderChapterList() {
+ 
+ function showChapter(i) {
+   currentChapter = i;
++  if (window.Tutor) Tutor.invalidate("lessons"); // stale suggestions once the chapter changes
+   const ch = LESSONS[i];
+   // the old plain-text "Try it" notes are replaced by the interactive challenge card
+   const body = ch.body.replace(/<div class="try-it">[\s\S]*?<\/div>/, "");
+diff --git a/frontend/js/progress.js b/frontend/js/progress.js
+index 01e64a4..82c4dc3 100644
+--- a/frontend/js/progress.js
++++ b/frontend/js/progress.js
+@@ -19,7 +19,7 @@
+     badge();
+   }
+   function get(i) { return mem.answers[i]; }
+-  function answer(i, pick) { if (mem.answers[i] === undefined) { mem.answers[i] = pick; save(); } }
++  function answer(i, pick) { if (mem.answers[i] === undefined) { mem.answers[i] = pick; save(); if (window.Tutor) Tutor.invalidate("progress"); } }
+   function reset() { mem = { answers: {} }; save(); render(); }
+ 
+   function summary() {
+@@ -72,13 +72,36 @@
+       <div class="prog-bar"><i style="width:${s.total ? (s.answered / s.total) * 100 : 0}%"></i></div>
+       <div class="prog-meta"><span>${s.answered} of ${s.total} answered</span>
+         <span><button type="button" class="tutor-btn" data-act="ask-general">Ask AI tutor</button> <button type="button" class="ghost" data-act="reset">Reset</button></span></div>
++      <div class="prog-suggested" id="progSuggested" hidden>
++        <span class="prog-suggested-label">Suggested for you</span>
++        <div class="prog-suggested-chips"></div>
++      </div>
+       <div class="prog-list">${chall().map((_, i) => card(i)).join("")}</div>`;
+     badge();
++    suggested();
++  }
++
++  /* "Suggested for you" — personalized questions from the backend, based on this session's results. */
++  function suggested() {
++    const box = $("progSuggested"); if (!box || !window.EntangleAPI) return;
++    const s = summary();
++    EntangleAPI.suggestQuestions(window.Tutor ? Tutor.simContext() : null, {
++      page: "progress",
++      progress: { answered: s.answered, correct: s.correct, total: s.total, results: s.results },
++    }).then((r) => {
++      const qs = (r.questions || []).filter(Boolean);
++      if (!qs.length) return;
++      box.hidden = false;
++      box.querySelector(".prog-suggested-chips").innerHTML =
++        qs.map((q) => `<button type="button">${q}</button>`).join("");
++    }).catch(() => { /* no suggestions this time — the section just stays hidden */ });
+   }
+ 
+   window.addEventListener("DOMContentLoaded", () => {
+     badge();
+     $("progressHost").addEventListener("click", (e) => {
++      const chip = e.target.closest("#progSuggested button");
++      if (chip) { window.Tutor && Tutor.send(chip.textContent); return; }
+       const b = e.target.closest("button"); if (!b) return;
+       const i = +b.dataset.q;
+       if (b.dataset.k !== undefined) { answer(i, +b.dataset.k); render(); return; }
+diff --git a/frontend/js/tutor.js b/frontend/js/tutor.js
+index 6996da7..d78b0a3 100644
+--- a/frontend/js/tutor.js
++++ b/frontend/js/tutor.js
+@@ -16,8 +16,10 @@
+   const CHIPS = {
+     lessons: ["Explain this chapter simply", "Give me an everyday analogy", "What should I learn next?"],
+     simulator: ["Why does my circuit give these results?", "Is my circuit entangled?", "What should I try next?"],
+-    progress: ["Which topics should I revisit?", "Explain my wrong answers", "Quiz me with a new question"],
++    progress: ["Which topics should I revisit?", "Explain my wrong answers", "What should I learn next?"],
+   };
++  let chipCache = {}; // page -> questions, so we don't refetch on every open
++  let chipSeq = 0;    // guards against a slow request overwriting a newer one
+ 
+   function build() {
+     const wrap = document.createElement("div");
+@@ -53,9 +55,26 @@
+     hist.forEach((m) => addMsg(m.role, m.content));
+     refresh();
+   }
+-  function refresh() {
++  function drawChips(list) {
+     const c = $("tutorChips"); if (!c) return;
+-    c.innerHTML = (CHIPS[page()] || []).map((t) => `<button type="button">${t}</button>`).join("");
++    c.innerHTML = list.map((t) => `<button type="button">${t}</button>`).join("");
++  }
++
++  /** Personalized suggestions from the backend, cached per page; falls back to the static CHIPS. */
++  function refresh(force) {
++    const p = page();
++    drawChips(chipCache[p] || CHIPS[p] || []);
++    if (chipCache[p] && !force) return;
++    const seq = ++chipSeq;
++    const s = window.Progress ? Progress.summary() : null;
++    EntangleAPI.suggestQuestions(simContext(), {
++      page: p, chapter: chapterTitle(),
++      progress: s ? { answered: s.answered, correct: s.correct, total: s.total, results: s.results } : undefined,
++    }).then((r) => {
++      if (seq !== chipSeq || page() !== p) return; // a newer request or page change already happened
++      const qs = (r.questions || []).filter(Boolean);
++      if (qs.length) { chipCache[p] = qs; drawChips(qs); }
++    }).catch(() => { /* keep the static chips already shown */ });
+   }
+   function toggle(open) {
+     const p = $("tutorPanel"), show = open === undefined ? p.hidden : open;
+@@ -115,6 +134,12 @@
+     send(q, focus);
+   }
+ 
++  /** Drop cached suggestions (a circuit run / chapter change / new answer makes the old ones stale). */
++  function invalidate(p) {
++    if (p) delete chipCache[p]; else chipCache = {};
++    if ($("tutorPanel") && !$("tutorPanel").hidden) refresh(true);
++  }
++
+   window.addEventListener("DOMContentLoaded", build);
+-  window.Tutor = { open: () => toggle(true), ask, send, refresh };
++  window.Tutor = { open: () => toggle(true), ask, send, refresh, invalidate, simContext, chapterTitle };
+ })();

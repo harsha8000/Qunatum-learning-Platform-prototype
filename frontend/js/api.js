@@ -33,7 +33,18 @@ window.EntangleAPI = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, context, ...extra }),
     });
-    if (!res.ok) throw new Error(`askTutor() failed: ${res.status}`);
+    if (!res.ok) throw new Error("ask-tutor failed");
+    return res.json();
+  },
+
+  /** 3 short, personalized follow-up questions for the current context. */
+  async suggestQuestions(context, extra = {}) {
+    const res = await fetch(`${API_BASE}/api/suggest-questions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ context, ...extra }),
+    });
+    if (!res.ok) throw new Error(`suggestQuestions() failed: ${res.status}`);
     return res.json();
   },
 

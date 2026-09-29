@@ -213,6 +213,75 @@ def _chat_messages(question, context, history, page, chapter, progress, focus) -
     return msgs
 
 
+SUGGEST_SYSTEM = (
+    "You suggest short follow-up questions a beginner could ask a quantum computing tutor chat, based on "
+    "what they are doing right now in a learning app. Return EXACTLY 3 questions, each under 12 words, in "
+    "the student's own voice (\"Why...\", \"What if...\", \"How does...\"). Prefer questions grounded in the "
+    "specific facts given (their circuit's real numbers, chapter, or wrong quiz answers) over generic ones. "
+    "Do not repeat a question already listed as asked. Output ONLY the 3 questions, one per line, no "
+    "numbering, no quotes, no extra text."
+)
+
+
+def _suggest_prompt(context, page, chapter, progress) -> str:
+    lines = []
+    if context:
+        lines.append(f"The student's last simulator run: {context}")
+    if page:
+        lines.append(f"They are currently on the {page} page.")
+    if chapter:
+        lines.append(f"Current lesson chapter: {chapter}.")
+    if progress and progress.get("results"):
+        wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
+        unanswered = [r["chapter"] for r in progress["results"] if not r.get("answered")]
+        if wrong:
+            lines.append(f"They got these practice questions wrong: {', '.join(wrong)}.")
+        if unanswered:
+            lines.append(f"Not yet attempted: {', '.join(unanswered)}.")
+    if not lines:
+        lines.append("They have just opened the app and haven't done anything yet.")
+    return "\n".join(lines)
+
+
+def _fallback_suggestions(context, page, chapter, progress) -> List[str]:
+    """No API key (or the call failed): simple rule-based suggestions, still personalized."""
+    out = []
+    if progress and progress.get("results"):
+        wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
+        if wrong:
+            out.append(f"Can you explain \"{wrong[0]}\" again, more simply?")
+        unanswered = [r["chapter"] for r in progress["results"] if not r.get("answered")]
+        if unanswered:
+            out.append(f"Give me a hint for \"{unanswered[0]}\"")
+    if context and context.get("gates"):
+        out.append("Why does my circuit give these results?")
+    if chapter:
+        out.append(f"Give me an everyday analogy for {chapter}")
+    out += ["What should I learn next?", "How is this used in real quantum computers?", "Quiz me on what I've learned so far"]
+    seen, uniq = set(), []
+    for q in out:
+        if q not in seen:
+            seen.add(q); uniq.append(q)
+    return uniq[:3]
+
+
+def suggest_questions(context, page=None, chapter=None, progress=None) -> List[str]:
+    """3 short, personalized follow-up questions for the chat panel and the Progress page."""
+    fallback = _fallback_suggestions(context, page, chapter, progress)
+    if not _client:
+        return fallback
+    try:
+        text = _ask_llm([
+            {"role": "system", "content": SUGGEST_SYSTEM},
+            {"role": "user", "content": _suggest_prompt(context, page, chapter, progress)},
+        ])
+        qs = [q.strip(" -*0123456789.\t") for q in text.splitlines() if q.strip()]
+        return qs[:3] if len(qs) >= 2 else fallback
+    except Exception as e:
+        print(f"[ai_tutor] suggest_questions failed: {e}")
+        return fallback
+
+
 def _offline_answer(focus: Optional[Dict[str, Any]]) -> str:
     if focus and focus.get("explanation"):
         pick, right = focus.get("student_pick"), focus.get("correct_answer")

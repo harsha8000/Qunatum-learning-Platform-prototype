@@ -603,6 +603,7 @@ async function runCircuit() {
     const data = await res.json();
     lastBlochVectors = data.bloch_vectors;
     window.lastSimResult = data;
+    if (window.Tutor) Tutor.invalidate("simulator"); // stale suggestions after a new run
 
     const counts = Object.fromEntries(Object.entries(data.counts).map(([k, v]) => [QM.flipKey(k), v]));
     renderBars(QM.probabilities(localPsi), counts);

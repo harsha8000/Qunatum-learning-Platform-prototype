@@ -19,7 +19,7 @@
     badge();
   }
   function get(i) { return mem.answers[i]; }
-  function answer(i, pick) { if (mem.answers[i] === undefined) { mem.answers[i] = pick; save(); } }
+  function answer(i, pick) { if (mem.answers[i] === undefined) { mem.answers[i] = pick; save(); if (window.Tutor) Tutor.invalidate("progress"); } }
   function reset() { mem = { answers: {} }; save(); render(); }
 
   function summary() {
@@ -72,13 +72,36 @@
       <div class="prog-bar"><i style="width:${s.total ? (s.answered / s.total) * 100 : 0}%"></i></div>
       <div class="prog-meta"><span>${s.answered} of ${s.total} answered</span>
         <span><button type="button" class="tutor-btn" data-act="ask-general">Ask AI tutor</button> <button type="button" class="ghost" data-act="reset">Reset</button></span></div>
+      <div class="prog-suggested" id="progSuggested" hidden>
+        <span class="prog-suggested-label">Suggested for you</span>
+        <div class="prog-suggested-chips"></div>
+      </div>
       <div class="prog-list">${chall().map((_, i) => card(i)).join("")}</div>`;
     badge();
+    suggested();
+  }
+
+  /* "Suggested for you" — personalized questions from the backend, based on this session's results. */
+  function suggested() {
+    const box = $("progSuggested"); if (!box || !window.EntangleAPI) return;
+    const s = summary();
+    EntangleAPI.suggestQuestions(window.Tutor ? Tutor.simContext() : null, {
+      page: "progress",
+      progress: { answered: s.answered, correct: s.correct, total: s.total, results: s.results },
+    }).then((r) => {
+      const qs = (r.questions || []).filter(Boolean);
+      if (!qs.length) return;
+      box.hidden = false;
+      box.querySelector(".prog-suggested-chips").innerHTML =
+        qs.map((q) => `<button type="button">${q}</button>`).join("");
+    }).catch(() => { /* no suggestions this time — the section just stays hidden */ });
   }
 
   window.addEventListener("DOMContentLoaded", () => {
     badge();
     $("progressHost").addEventListener("click", (e) => {
+      const chip = e.target.closest("#progSuggested button");
+      if (chip) { window.Tutor && Tutor.send(chip.textContent); return; }
       const b = e.target.closest("button"); if (!b) return;
       const i = +b.dataset.q;
       if (b.dataset.k !== undefined) { answer(i, +b.dataset.k); render(); return; }

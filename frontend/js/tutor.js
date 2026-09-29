@@ -16,8 +16,10 @@
   const CHIPS = {
     lessons: ["Explain this chapter simply", "Give me an everyday analogy", "What should I learn next?"],
     simulator: ["Why does my circuit give these results?", "Is my circuit entangled?", "What should I try next?"],
-    progress: ["Which topics should I revisit?", "Explain my wrong answers", "Quiz me with a new question"],
+    progress: ["Which topics should I revisit?", "Explain my wrong answers", "What should I learn next?"],
   };
+  let chipCache = {}; // page -> questions, so we don't refetch on every open
+  let chipSeq = 0;    // guards against a slow request overwriting a newer one
 
   function build() {
     const wrap = document.createElement("div");
@@ -53,9 +55,26 @@
     hist.forEach((m) => addMsg(m.role, m.content));
     refresh();
   }
-  function refresh() {
+  function drawChips(list) {
     const c = $("tutorChips"); if (!c) return;
-    c.innerHTML = (CHIPS[page()] || []).map((t) => `<button type="button">${t}</button>`).join("");
+    c.innerHTML = list.map((t) => `<button type="button">${t}</button>`).join("");
+  }
+
+  /** Personalized suggestions from the backend, cached per page; falls back to the static CHIPS. */
+  function refresh(force) {
+    const p = page();
+    drawChips(chipCache[p] || CHIPS[p] || []);
+    if (chipCache[p] && !force) return;
+    const seq = ++chipSeq;
+    const s = window.Progress ? Progress.summary() : null;
+    EntangleAPI.suggestQuestions(simContext(), {
+      page: p, chapter: chapterTitle(),
+      progress: s ? { answered: s.answered, correct: s.correct, total: s.total, results: s.results } : undefined,
+    }).then((r) => {
+      if (seq !== chipSeq || page() !== p) return; // a newer request or page change already happened
+      const qs = (r.questions || []).filter(Boolean);
+      if (qs.length) { chipCache[p] = qs; drawChips(qs); }
+    }).catch(() => { /* keep the static chips already shown */ });
   }
   function toggle(open) {
     const p = $("tutorPanel"), show = open === undefined ? p.hidden : open;
@@ -115,6 +134,12 @@
     send(q, focus);
   }
 
+  /** Drop cached suggestions (a circuit run / chapter change / new answer makes the old ones stale). */
+  function invalidate(p) {
+    if (p) delete chipCache[p]; else chipCache = {};
+    if ($("tutorPanel") && !$("tutorPanel").hidden) refresh(true);
+  }
+
   window.addEventListener("DOMContentLoaded", build);
-  window.Tutor = { open: () => toggle(true), ask, send, refresh };
+  window.Tutor = { open: () => toggle(true), ask, send, refresh, invalidate, simContext, chapterTitle };
 })();
