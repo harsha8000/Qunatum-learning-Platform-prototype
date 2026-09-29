@@ -17,6 +17,7 @@ Then open ../frontend/index.html in a browser.
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+import models
 from models import CircuitRequest, TutorRequest
 from circuit_canon import to_canonical_qasm3
 from engines import run_on, ENGINES

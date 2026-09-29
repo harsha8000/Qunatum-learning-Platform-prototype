@@ -1,0 +1,33 @@
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -17,6 +17,7 @@
+ from fastapi import FastAPI, Query
+ from fastapi.middleware.cors import CORSMiddleware
+ 
++import models
+ from models import CircuitRequest, TutorRequest
+ from circuit_canon import to_canonical_qasm3
+ from engines import run_on, ENGINES
+--- a/frontend/js/circuit-builder.js
++++ b/frontend/js/circuit-builder.js
+@@ -718,6 +718,20 @@
+ document.getElementById("qasmCode").addEventListener("keydown", (e) => {
+   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); applyQASM(); } // Ctrl/Cmd+Enter applies
+ });
++/* Live sync: auto-apply the code ~600ms after typing stops, so the board/simulator
++   follow the editor without waiting for a manual click. Only applies when the text
++   parses; a bad edit just shows the inline error and leaves the board untouched. */
++let qasmAutoTimer = null;
++document.getElementById("qasmCode").addEventListener("input", () => {
++  clearTimeout(qasmAutoTimer);
++  const err = document.getElementById("qasmError");
++  qasmAutoTimer = setTimeout(() => {
++    const box = document.getElementById("qasmCode");
++    const parsed = qasmToGates(box.value);
++    if (parsed.ok) applyQASM();
++    else if (err) err.textContent = parsed.error; // show the problem, don't touch the board
++  }, 600);
++});
+ document.getElementById("qasmCopy").addEventListener("click", () => {
+   navigator.clipboard.writeText(document.getElementById("qasmCode").value).then(() => {
+     const b = document.getElementById("qasmCopy"); const old = b.textContent;
