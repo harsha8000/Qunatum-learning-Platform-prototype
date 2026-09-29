@@ -124,8 +124,10 @@
             <button type="button" data-tab="qasm">Code</button>
           </div>
           <div class="tab-pane" id="tab-explain">
+            <div class="insights-head"><b>AI Insights</b><span class="card-note">What the simulator actually produced for this circuit.</span></div>
             <div id="explanation">Press Run to get an explanation of your circuit.</div>
             <div class="tutor-src" id="tutorSrc"></div>
+            <button type="button" class="ghost" id="explainAsk">Ask AI tutor about this</button>
           </div>
           <div class="tab-pane" id="tab-corr" hidden>
             <div id="corrPanel"></div>

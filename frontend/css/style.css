@@ -146,6 +146,9 @@ input[type=range], input[type=checkbox] { accent-color: var(--accent); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
 .card h3 { margin: 0 0 8px; font-family: var(--serif); font-size: 1rem; font-weight: 600; color: var(--ink); }
 .card-note { margin: 8px 0 0; font-size: .78rem; line-height: 1.45; color: var(--ink-2); }
+.insights-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.insights-head b { font-family: var(--serif); font-size: 1rem; }
+#explainAsk { margin-top: 10px; }
 
 /* mission bar */
 .mission-bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding: 9px 14px; border-radius: 6px; background: #24231e; color: #f3efe6; box-shadow: 0 2px 0 rgba(0,0,0,.18); }

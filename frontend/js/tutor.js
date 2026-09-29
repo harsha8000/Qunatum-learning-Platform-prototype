@@ -38,6 +38,10 @@
     $("tutorSend").addEventListener("click", () => send());
     $("tutorIn").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
     $("tutorChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) send(b.textContent); });
+    // "Ask AI tutor about this" on the Simulator's Explain tab: opens the chat panel on this
+    // page and immediately asks about the last run circuit (simContext() feeds it automatically).
+    const explainAsk = $("explainAsk");
+    if (explainAsk) explainAsk.addEventListener("click", () => send("Why does my circuit give these results?"));
     drawAll();
   }
 
@@ -111,6 +115,7 @@
       const ans = (r.answer || "").trim() || "I couldn't come up with an answer. Try rephrasing your question.";
       pending.textContent = ans; pending.classList.remove("pending");
       hist.push({ role: "assistant", content: ans }); persist();
+      invalidate(page()); // each answered question changes the context, so re-guess the next suggestions
     } catch (err) {
       pending.textContent = "I couldn't reach the tutor backend. Make sure it is running (uvicorn main:app --port 8000, or the hosted API), then try again.";
       pending.classList.remove("pending"); pending.classList.add("err");

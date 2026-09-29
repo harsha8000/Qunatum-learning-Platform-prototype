@@ -1,0 +1,46 @@
+--- a/frontend/js/tutor.js
++++ b/frontend/js/tutor.js
+@@ -38,6 +38,10 @@
+     $("tutorSend").addEventListener("click", () => send());
+     $("tutorIn").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+     $("tutorChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) send(b.textContent); });
++    // "Ask AI tutor about this" on the Simulator's Explain tab: opens the chat panel on this
++    // page and immediately asks about the last run circuit (simContext() feeds it automatically).
++    const explainAsk = $("explainAsk");
++    if (explainAsk) explainAsk.addEventListener("click", () => send("Why does my circuit give these results?"));
+     drawAll();
+   }
+ 
+@@ -111,6 +115,7 @@
+       const ans = (r.answer || "").trim() || "I couldn't come up with an answer. Try rephrasing your question.";
+       pending.textContent = ans; pending.classList.remove("pending");
+       hist.push({ role: "assistant", content: ans }); persist();
++      invalidate(page()); // each answered question changes the context, so re-guess the next suggestions
+     } catch (err) {
+       pending.textContent = "I couldn't reach the tutor backend. Make sure it is running (uvicorn main:app --port 8000, or the hosted API), then try again.";
+       pending.classList.remove("pending"); pending.classList.add("err");
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -124,8 +124,10 @@
+             <button type="button" data-tab="qasm">Code</button>
+           </div>
+           <div class="tab-pane" id="tab-explain">
++            <div class="insights-head"><b>AI Insights</b><span class="card-note">What the simulator actually produced for this circuit.</span></div>
+             <div id="explanation">Press Run to get an explanation of your circuit.</div>
+             <div class="tutor-src" id="tutorSrc"></div>
++            <button type="button" class="ghost" id="explainAsk">Ask AI tutor about this</button>
+           </div>
+           <div class="tab-pane" id="tab-corr" hidden>
+             <div id="corrPanel"></div>
+--- a/frontend/css/style.css
++++ b/frontend/css/style.css
+@@ -146,6 +146,9 @@
+ .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+ .card h3 { margin: 0 0 8px; font-family: var(--serif); font-size: 1rem; font-weight: 600; color: var(--ink); }
+ .card-note { margin: 8px 0 0; font-size: .78rem; line-height: 1.45; color: var(--ink-2); }
++.insights-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
++.insights-head b { font-family: var(--serif); font-size: 1rem; }
++#explainAsk { margin-top: 10px; }
+ 
+ /* mission bar */
+ .mission-bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding: 9px 14px; border-radius: 6px; background: #24231e; color: #f3efe6; box-shadow: 0 2px 0 rgba(0,0,0,.18); }
