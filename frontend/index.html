@@ -118,9 +118,10 @@
           <div class="bars" id="bars"></div>
         </div>
         <div class="card compact">
-          <div class="seg tabs-seg" id="simTabs" role="tablist" hidden>
+          <div class="seg tabs-seg" id="simTabs" role="tablist">
             <button type="button" data-tab="explain" class="active">Explain</button>
             <button type="button" data-tab="corr" hidden>Entanglement</button>
+            <button type="button" data-tab="qasm">Code</button>
           </div>
           <div class="tab-pane" id="tab-explain">
             <div id="explanation">Press Run to get an explanation of your circuit.</div>
@@ -129,6 +130,15 @@
           <div class="tab-pane" id="tab-corr" hidden>
             <div id="corrPanel"></div>
             <p class="card-note">Left: the state as a grid of amplitudes. Right: how much the qubits' X/Y/Z results agree (+1 always, −1 never).</p>
+          </div>
+          <div class="tab-pane" id="tab-qasm" hidden>
+            <textarea id="qasmCode" spellcheck="false" rows="12"></textarea>
+            <div class="qasm-actions">
+              <button type="button" id="qasmApply">Update circuit</button>
+              <button type="button" class="ghost" id="qasmCopy">Copy</button>
+              <span class="qasm-error" id="qasmError"></span>
+            </div>
+            <p class="card-note">Edit the code and click "Update circuit" to rebuild the board and re-run. Supported gates: h, x, y, z, s, sdg, t, tdg, sx, cx, cz, swap — 2 qubits, up to 8 instructions.</p>
           </div>
         </div>
       </div>

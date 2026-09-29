@@ -11,6 +11,9 @@ const N_SLOTS = 8;
 const TWO_QUBIT = QM.TWO_QUBIT;                       // ["CNOT", "CZ", "SWAP"]
 const isTwoQubit = (t) => TWO_QUBIT.includes(t);
 const GATE_LABEL = { H: "H", X: "X", Y: "Y", Z: "Z", S: "S", Sdg: "S†", T: "T", Tdg: "T†", SX: "√X" };
+/* OpenQASM 2.0 name <-> internal gate type, both directions (qelib1.inc names, lowercase). */
+const QASM_NAME = { H: "h", X: "x", Y: "y", Z: "z", S: "s", Sdg: "sdg", T: "t", Tdg: "tdg", SX: "sx", CNOT: "cx", CZ: "cz", SWAP: "swap" };
+const QASM_FROM_NAME = Object.fromEntries(Object.entries(QASM_NAME).map(([k, v]) => [v, k]));
 
 /* ---------------- circuit board state ---------------- */
 // slotState[row][col] = null | 'H' | 'X' | 'Y' | ... | {pair:'CNOT'|'CZ'|'SWAP', role, otherRow, slot}
@@ -48,6 +51,7 @@ function placePair(type, row, col) {
   gates.push({ type, control: row, target: other, slot: col });
   renderSlot(row, col);
   renderSlot(other, col);
+  refreshQASM();
 }
 
 function onDrop(e) {
@@ -69,6 +73,7 @@ function onDrop(e) {
     slotState[row][col] = gateType;
     gates.push({ type: gateType, qubit: row, slot: col });
     renderSlot(row, col);
+    refreshQASM();
   }
 }
 
@@ -89,6 +94,7 @@ function removeAt(row, col) {
     slotState[row][col] = null;
     renderSlot(row, col);
   }
+  refreshQASM();
 }
 
 function renderSlot(row, col) {
@@ -219,6 +225,7 @@ function addGateToQubit(gateType, qubit) {
       slotState[qubit][col] = gateType;
       gates.push({ type: gateType, qubit, slot: col });
       renderSlot(qubit, col);
+      refreshQASM();
       runCircuit();
       return true;
     }
@@ -250,7 +257,7 @@ function sendQubitToMatrixLab(qubit) {
 /* preload the classic Bell-state demo: H on qubit0 slot0, CNOT control0->target1 slot1 */
 function preload() {
   slotState[0][0] = "H"; gates.push({ type: "H", qubit: 0, slot: 0 }); renderSlot(0, 0);
-  placePair("CNOT", 0, 1);
+  placePair("CNOT", 0, 1); // placePair() already calls refreshQASM()
   drawConnectors();
 }
 
@@ -269,6 +276,84 @@ function loadCircuit(list) {
     }
   });
   drawConnectors();
+  refreshQASM();
+}
+
+/* ---------------- QASM code view ----------------
+   The board is a single ordered timeline (same order used for /api/simulate):
+   `gatesToQASM` renders it as OpenQASM 2.0; `qasmToGates` parses that back into
+   the same ordered-gate shape so it can be replayed onto the board with
+   loadCircuit(), one instruction per column, exactly like a lesson "load this
+   circuit" does. Editing the text and clicking "Update circuit" is therefore
+   just another way of building the same `gates` list the palette builds. */
+const QASM_HEADER = 'OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\ncreg c[2];\n\n';
+
+function orderedGateList() {
+  return [...gates].sort((a, b) => a.slot - b.slot).map((g) =>
+    isTwoQubit(g.type) ? { type: g.type, control: g.control, target: g.target } : { type: g.type, qubit: g.qubit }
+  );
+}
+
+function gatesToQASM(list) {
+  const body = list.map((g) => isTwoQubit(g.type)
+    ? `${QASM_NAME[g.type]} q[${g.control}],q[${g.target}];`
+    : `${QASM_NAME[g.type]} q[${g.qubit}];`
+  ).join("\n");
+  return QASM_HEADER + (body || "// (empty circuit — drag gates onto the board, or write instructions here)");
+}
+
+/* Parses OpenQASM 2.0 back into our ordered-gate shape. Only the subset this app
+   can represent is accepted: 2 qubits, the 9 single-qubit gates + cx/cz/swap, no
+   loops/custom gates/classical control. Returns { ok, gates } or { ok, error }. */
+function qasmToGates(text) {
+  const out = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].replace(/\/\/.*/, "").trim();
+    if (!line) continue;
+    line = line.replace(/;\s*$/, "");
+    const head = line.toLowerCase();
+    if (/^(openqasm|include|qreg|creg|measure|barrier)\b/.test(head)) continue;
+
+    const one = line.match(/^(\w+)\s+q\[\s*([01])\s*\]$/i);
+    const two = line.match(/^(\w+)\s+q\[\s*([01])\s*\]\s*,\s*q\[\s*([01])\s*\]$/i);
+    if (two) {
+      const type = QASM_FROM_NAME[two[1].toLowerCase()];
+      if (!type || !isTwoQubit(type)) return { ok: false, error: `Line ${i + 1}: unknown 2-qubit gate "${two[1]}".` };
+      const control = +two[2], target = +two[3];
+      if (control === target) return { ok: false, error: `Line ${i + 1}: ${two[1]} needs two different qubits.` };
+      out.push({ type, control, target });
+    } else if (one) {
+      const type = QASM_FROM_NAME[one[1].toLowerCase()];
+      if (!type || isTwoQubit(type)) return { ok: false, error: `Line ${i + 1}: unknown gate "${one[1]}".` };
+      out.push({ type, qubit: +one[2] });
+    } else {
+      return { ok: false, error: `Line ${i + 1}: can't read "${lines[i].trim()}".` };
+    }
+  }
+  if (out.length > N_SLOTS) return { ok: false, error: `Too many instructions (${out.length}) — this board only has ${N_SLOTS} time steps.` };
+  return { ok: true, gates: out };
+}
+
+/* Keep the textarea in sync with the board. Skips the refresh while the
+   student is actively typing in it, so an in-progress edit is never clobbered —
+   `force` (used when the Code tab is opened) overrides that. */
+function refreshQASM(force) {
+  const box = document.getElementById("qasmCode");
+  if (!box || (document.activeElement === box && !force)) return;
+  box.value = gatesToQASM(orderedGateList());
+  const err = document.getElementById("qasmError");
+  if (err) err.textContent = "";
+}
+
+function applyQASM() {
+  const box = document.getElementById("qasmCode");
+  const err = document.getElementById("qasmError");
+  const parsed = qasmToGates(box.value);
+  if (!parsed.ok) { err.textContent = parsed.error; return; }
+  err.textContent = "";
+  loadCircuit(parsed.gates); // rebuilds slotState/gates and re-renders the board (also calls refreshQASM())
+  runCircuit();              // bars, Bloch spheres and the explanation now match the new code too
 }
 
 /* ---------------- Bloch spheres (three.js) ----------------
@@ -629,6 +714,16 @@ async function runCircuit() {
 
 runBtn.addEventListener("click", runCircuit);
 window.addEventListener("resize", drawConnectors);
+document.getElementById("qasmApply").addEventListener("click", applyQASM);
+document.getElementById("qasmCode").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); applyQASM(); } // Ctrl/Cmd+Enter applies
+});
+document.getElementById("qasmCopy").addEventListener("click", () => {
+  navigator.clipboard.writeText(document.getElementById("qasmCode").value).then(() => {
+    const b = document.getElementById("qasmCopy"); const old = b.textContent;
+    b.textContent = "Copied!"; setTimeout(() => { b.textContent = old; }, 1200);
+  });
+});
 document.getElementById("viewMatrix0").addEventListener("click", () => sendQubitToMatrixLab(0));
 document.getElementById("viewMatrix1").addEventListener("click", () => sendQubitToMatrixLab(1));
 

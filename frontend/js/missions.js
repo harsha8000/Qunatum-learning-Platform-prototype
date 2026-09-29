@@ -13,6 +13,8 @@
     document.querySelectorAll("#simTabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
     $("tab-explain").hidden = name !== "explain";
     $("tab-corr").hidden = name !== "corr";
+    $("tab-qasm").hidden = name !== "qasm";
+    if (name === "qasm" && window.refreshQASM) refreshQASM(true); // sync the code with the board on open
   }
   function openLab(open, scroll) {
     $("matrixWrap").hidden = !open;
@@ -29,7 +31,6 @@
     const btn = document.querySelector('#simTabs [data-tab="corr"]');
     btn.hidden = !hasCnot;
     btn.textContent = entangled ? "Entanglement ●" : "Entanglement";
-    $("simTabs").hidden = !hasCnot;
     if (!hasCnot && !$("tab-corr").hidden) showTab("explain");
   }
   window.SimUI = { showTab, openLab, setEntanglement };
