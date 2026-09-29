@@ -178,33 +178,80 @@ def generate_explanation(gates, bloch_vectors, purities, probabilities) -> str:
         return fallback + "\n\n(AI tutor unavailable right now, so this is the built-in explanation.)"
 
 
-CHAT_SYSTEM = (
+# ------------------------------------------------------------- per-page tutors
+# Three independent tutor "personas" — Lessons, Simulator, Progress — each with
+# its own system prompt and its own slice of context. Each page's chat also
+# already has its own history thread (kept client-side, per page), so nothing
+# said or asked on one page leaks into another: a shared style base, but the
+# domain, the facts offered, and the focus are all page-specific.
+CHAT_SYSTEM_BASE = (
     "You are a friendly quantum computing tutor inside a learning app for a complete beginner. "
-    "Answer questions about the lesson topics (states and amplitudes, the Bloch sphere, inner and tensor "
-    "products, unitary gates, entanglement, measurement) in plain, Feynman-style language: intuition first, "
-    "maths only when needed. Standard textbook facts (for example H|0> = |+>) are fine. But when you talk "
-    "about the student's own circuit, use ONLY the numbers in 'Simulator facts'; never invent or estimate one. "
-    "If they ask about their circuit and no facts are given, tell them to press Run in the Simulator first. "
-    "If a practice question is provided, use its official explanation; when the student picked a wrong answer, "
-    "be kind and explain the idea rather than just stating the answer. If they ask for a hint, do not reveal "
-    "the answer. Keep replies to 3-7 sentences. Output PLAIN TEXT only: no LaTeX, no markdown, no bullet "
-    "symbols. Write kets with Unicode, like |0⟩, |1⟩, |+⟩, |00⟩, and use ψ, α, β, √2, ⊗ directly."
+    "Use plain, Feynman-style language: intuition first, maths only when needed. Standard textbook facts "
+    "(for example H|0> = |+>) are fine, but never invent or estimate a number that isn't given to you in "
+    "the facts below. Keep replies to 3-7 sentences. Output PLAIN TEXT only: no LaTeX, no markdown, no "
+    "bullet symbols. Write kets with Unicode, like |0⟩, |1⟩, |+⟩, |00⟩, and use ψ, α, β, √2, ⊗ directly."
 )
+
+CHAT_SYSTEM_LESSONS = CHAT_SYSTEM_BASE + (
+    "\n\nYou are the Lessons tutor. The student is reading one specific chapter right now — stay inside "
+    "that chapter's own topic (it's given to you below as 'Current lesson chapter'). Explain its concepts, "
+    "give analogies for it, and answer follow-ups about it. Don't bring up their simulator circuit or their "
+    "quiz score unless the student explicitly asks about one of those. Every time the chapter changes, treat "
+    "it as a fresh topic — do not assume anything carries over from a chapter discussed earlier."
+)
+
+CHAT_SYSTEM_SIMULATOR = CHAT_SYSTEM_BASE + (
+    "\n\nYou are the Simulator tutor. The student is building and running circuits — stay inside that: "
+    "their gates, their Bloch vectors, their purities, their measured probabilities ('Simulator facts' "
+    "below). Use ONLY those numbers, never invent or estimate one. If they ask about their circuit and no "
+    "facts are given, tell them to press Run in the Simulator first. Don't bring up lesson chapters or quiz "
+    "results unless the student explicitly asks about one of those."
+)
+
+CHAT_SYSTEM_PROGRESS = CHAT_SYSTEM_BASE + (
+    "\n\nYou are the Progress tutor. The student is reviewing their quiz results across the whole course — "
+    "stay inside that: which chapters they got right or wrong, and which chapters they haven't tried yet. "
+    "If a practice question is provided as 'Practice question being discussed', use its official explanation; "
+    "when the student picked a wrong answer, be kind and explain the idea rather than just restating the "
+    "right answer. If they ask for a hint, do not reveal the answer. Help them decide what to review or "
+    "which lesson to start next. Don't bring up a specific simulator circuit unless the student explicitly "
+    "asks about one."
+)
+
+_CHAT_SYSTEM_BY_PAGE = {
+    "lessons": CHAT_SYSTEM_LESSONS,
+    "simulator": CHAT_SYSTEM_SIMULATOR,
+    "progress": CHAT_SYSTEM_PROGRESS,
+}
 
 
 def _chat_messages(question, context, history, page, chapter, progress, focus) -> List[dict]:
+    system = _CHAT_SYSTEM_BY_PAGE.get(page, CHAT_SYSTEM_BASE)
     ctx = []
-    ctx.append(f"Simulator facts (outcome labels are |q0 q1>, qubit 0 on the left): {context}" if context
-               else "Simulator facts: none yet (the student has not run a circuit).")
-    if page:
-        ctx.append(f"The student is on the {page} page.")
-    if chapter:
-        ctx.append(f"Current lesson chapter: {chapter}.")
-    if progress:
-        ctx.append(f"Session quiz progress: {progress}")
-    if focus:
-        ctx.append(f"Practice question being discussed: {focus}")
-    msgs = [{"role": "system", "content": CHAT_SYSTEM + "\n\n" + "\n".join(ctx)}]
+    # Each page's tutor is offered the facts that belong to ITS domain first;
+    # the others are still included (a student can always ask off-topic), but
+    # the system prompt above is what keeps each tutor's own suggestions and
+    # default focus from drifting into the other pages' territory.
+    if page == "lessons":
+        ctx.append(f"Current lesson chapter: {chapter}." if chapter else "No chapter open yet.")
+    elif page == "simulator":
+        ctx.append(f"Simulator facts (outcome labels are |q0 q1>, qubit 0 on the left): {context}" if context
+                   else "Simulator facts: none yet (the student has not run a circuit).")
+    elif page == "progress":
+        if progress:
+            ctx.append(f"Session quiz progress: {progress}")
+        if focus:
+            ctx.append(f"Practice question being discussed: {focus}")
+    else:
+        ctx.append(f"Simulator facts (outcome labels are |q0 q1>, qubit 0 on the left): {context}" if context
+                   else "Simulator facts: none yet (the student has not run a circuit).")
+        if chapter:
+            ctx.append(f"Current lesson chapter: {chapter}.")
+        if progress:
+            ctx.append(f"Session quiz progress: {progress}")
+        if focus:
+            ctx.append(f"Practice question being discussed: {focus}")
+    msgs = [{"role": "system", "content": system + "\n\n" + "\n".join(ctx)}]
     for h in (history or [])[-8:]:
         role, text = h.get("role"), str(h.get("content", ""))[:1500]
         if role in ("user", "assistant") and text:
@@ -213,68 +260,108 @@ def _chat_messages(question, context, history, page, chapter, progress, focus) -
     return msgs
 
 
-SUGGEST_SYSTEM = (
-    "You suggest short follow-up questions a beginner could ask a quantum computing tutor chat, based on "
-    "what they are doing right now in a learning app. Return EXACTLY 3 questions, each under 12 words, in "
-    "the student's own voice (\"Why...\", \"What if...\", \"How does...\"). Prefer questions grounded in the "
-    "specific facts given (their circuit's real numbers, chapter, or wrong quiz answers) over generic ones. "
-    "Do not repeat a question already listed as asked. Output ONLY the 3 questions, one per line, no "
-    "numbering, no quotes, no extra text."
+SUGGEST_SYSTEM_BASE = (
+    "You suggest short follow-up questions a beginner could ask a quantum computing tutor chat. Return "
+    "EXACTLY 3 questions, each under 12 words, in the student's own voice (\"Why...\", \"What if...\", "
+    "\"How does...\"). Output ONLY the 3 questions, one per line, no numbering, no quotes, no extra text."
+)
+
+# Each page gets its own suggestion persona, scoped to its own domain only — the
+# Lessons tutor never suggests simulator or quiz questions, the Simulator tutor
+# never suggests lesson or quiz questions, and so on. Swapping pages (or chapters,
+# or circuits) resets this: the caller invalidates the cached chips on every such
+# change (see tutor.js), so a fresh, on-topic set is fetched right after.
+SUGGEST_SYSTEM_LESSONS = SUGGEST_SYSTEM_BASE + (
+    "\n\nThe student is reading ONE specific lesson chapter (given below). Every question must be about "
+    "that chapter's own content only — never about a simulator circuit or a quiz score, even in passing. "
+    "Ground the questions in the chapter's title/topic rather than asking something generic."
+)
+
+SUGGEST_SYSTEM_SIMULATOR = SUGGEST_SYSTEM_BASE + (
+    "\n\nThe student is in the circuit Simulator. Every question must be about THEIR circuit and its real "
+    "results (gates, Bloch vectors, purities, measured probabilities), given below — never about a lesson "
+    "chapter or a quiz score. If no circuit has been run yet, suggest questions about building or running one."
 )
 
 
-def _suggest_prompt(context, page, chapter, progress) -> str:
-    lines = []
-    if context:
-        lines.append(f"The student's last simulator run: {context}")
-    if page:
-        lines.append(f"They are currently on the {page} page.")
-    if chapter:
-        lines.append(f"Current lesson chapter: {chapter}.")
-    if progress and progress.get("results"):
-        wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
-        unanswered = [r["chapter"] for r in progress["results"] if not r.get("answered")]
-        if wrong:
-            lines.append(f"They got these practice questions wrong: {', '.join(wrong)}.")
-        if unanswered:
-            lines.append(f"Not yet attempted: {', '.join(unanswered)}.")
-    if not lines:
-        lines.append("They have just opened the app and haven't done anything yet.")
-    return "\n".join(lines)
+def _suggest_prompt_lessons(chapter) -> str:
+    return f"Current lesson chapter: {chapter}." if chapter else "They haven't opened a chapter yet."
 
 
-def _fallback_suggestions(context, page, chapter, progress) -> List[str]:
-    """No API key (or the call failed): simple rule-based suggestions, still personalized."""
-    out = []
-    if progress and progress.get("results"):
-        wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
-        if wrong:
-            out.append(f"Can you explain \"{wrong[0]}\" again, more simply?")
-        unanswered = [r["chapter"] for r in progress["results"] if not r.get("answered")]
-        if unanswered:
-            out.append(f"Give me a hint for \"{unanswered[0]}\"")
+def _suggest_prompt_simulator(context) -> str:
+    return f"The student's last simulator run: {context}" if context else "They haven't run a circuit yet."
+
+
+def _fallback_lessons(chapter) -> List[str]:
+    if not chapter:
+        return ["What should I learn first?", "How does this app work?", "Where do I start?"]
+    return [f"Explain \"{chapter}\" more simply", f"Give me an everyday analogy for {chapter}",
+            f"What's the key takeaway from \"{chapter}\"?"]
+
+
+def _fallback_simulator(context) -> List[str]:
     if context and context.get("gates"):
-        out.append("Why does my circuit give these results?")
-    if chapter:
-        out.append(f"Give me an everyday analogy for {chapter}")
-    out += ["What should I learn next?", "How is this used in real quantum computers?", "Quiz me on what I've learned so far"]
-    seen, uniq = set(), []
-    for q in out:
-        if q not in seen:
-            seen.add(q); uniq.append(q)
-    return uniq[:3]
+        return ["Why does my circuit give these results?", "Is my circuit entangled?", "What should I try next?"]
+    return ["What gate should I start with?", "How do I build a Bell state?", "What does entanglement look like here?"]
+
+
+def _progress_suggestions(progress) -> List[str]:
+    """Rule-based, not left to the model: the Progress tutor's chips must always
+    steer toward finishing the lesson plan — reviewing a wrong answer first (if
+    any), then starting the next not-yet-attempted lesson (if any) — so this
+    priority is enforced directly rather than just hoped for from a prompt."""
+    results = (progress or {}).get("results") or []
+    wrong = [r["chapter"] for r in results if r.get("answered") and not r.get("correct")]
+    unanswered = [r["chapter"] for r in results if not r.get("answered")]
+    out = []
+    if wrong:
+        out.append(f"Can we review \"{wrong[0]}\" — I got it wrong?")
+    if unanswered:
+        out.append(f"Should I start the lesson on \"{unanswered[0]}\" next?")
+    if len(wrong) > 1:
+        out.append(f"Can we go over \"{wrong[1]}\" too?")
+    elif len(unanswered) > 1:
+        out.append(f"What about \"{unanswered[1]}\" after that?")
+    elif wrong or unanswered:
+        out.append("What should I revisit before moving on?")
+    if not out:
+        out = ["I've finished everything — what should I review to make it stick?",
+               "Which topic is easiest to forget?", "Quiz me on what I've learned so far"]
+    return out[:3]
 
 
 def suggest_questions(context, page=None, chapter=None, progress=None) -> List[str]:
-    """3 short, personalized follow-up questions for the chat panel and the Progress page."""
-    fallback = _fallback_suggestions(context, page, chapter, progress)
+    """3 short, personalized follow-up questions — generated independently per page,
+    each tutor only ever seeing (and only ever suggesting about) its own domain."""
+    if page == "progress":
+        # Deterministic on purpose: lesson-plan completion is a hard business
+        # rule for this tutor, not a stylistic preference to leave to the LLM.
+        return _progress_suggestions(progress)
+
+    if page == "simulator":
+        system, prompt, fallback = SUGGEST_SYSTEM_SIMULATOR, _suggest_prompt_simulator(context), _fallback_simulator(context)
+    elif page == "lessons":
+        system, prompt, fallback = SUGGEST_SYSTEM_LESSONS, _suggest_prompt_lessons(chapter), _fallback_lessons(chapter)
+    else:
+        # Unknown/no page (e.g. a direct API call without one): keep the old
+        # generic, everything-goes behavior rather than guessing a domain.
+        system = SUGGEST_SYSTEM_BASE + "\n\nPrefer questions grounded in whatever facts are given below."
+        parts = []
+        if context:
+            parts.append(f"The student's last simulator run: {context}")
+        if chapter:
+            parts.append(f"Current lesson chapter: {chapter}.")
+        if progress and progress.get("results"):
+            wrong = [r["chapter"] for r in progress["results"] if r.get("answered") and not r.get("correct")]
+            if wrong:
+                parts.append(f"They got these practice questions wrong: {', '.join(wrong)}.")
+        prompt = "\n".join(parts) or "They have just opened the app and haven't done anything yet."
+        fallback = ["What should I learn next?", "How is this used in real quantum computers?", "Quiz me on what I've learned so far"]
+
     if not _client:
         return fallback
     try:
-        text = _ask_llm([
-            {"role": "system", "content": SUGGEST_SYSTEM},
-            {"role": "user", "content": _suggest_prompt(context, page, chapter, progress)},
-        ])
+        text = _ask_llm([{"role": "system", "content": system}, {"role": "user", "content": prompt}])
         qs = [q.strip(" -*0123456789.\t") for q in text.splitlines() if q.strip()]
         return qs[:3] if len(qs) >= 2 else fallback
     except Exception as e:
