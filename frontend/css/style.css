@@ -403,11 +403,6 @@ details.fold[open] > summary { margin-bottom: 8px; }
 @media (max-width: 640px) { .tutor-panel { right: 6px; bottom: 6px; height: 80vh; } .prog-head { flex-direction: column; } .prog-score { text-align: left; } }
 
 /* ---------- "Suggested for you" (Progress page) ---------- */
-.prog-suggested { margin: 4px 0 18px; }
-.prog-suggested-label { font-family: var(--mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
-.prog-suggested-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.prog-suggested-chips button { font-size: .82rem; padding: 5px 12px; border-radius: 14px; border-color: var(--accent); color: var(--accent); background: var(--card); }
-.prog-suggested-chips button:hover:not(:disabled) { background: rgba(31,92,74,.1); }
 
 /* ---------- QASM code tab (Simulator page) ---------- */
 #qasmCode { width: 100%; box-sizing: border-box; resize: vertical; font-family: var(--mono); font-size: .82rem; line-height: 1.5; color: var(--ink); background: var(--paper); border: 1px solid var(--line-strong); border-radius: 4px; padding: 10px 12px; }
