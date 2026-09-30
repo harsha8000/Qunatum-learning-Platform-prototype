@@ -1,5 +1,5 @@
 /* =========================================================================
-   Egreen Quanta — styles
+   Q-Quotient — styles
    Look: printed lab notebook. Warm paper, ink text, one green accent, flat
    colour (no gradients, glow or glass). Serif for reading and titles, sans for
    controls, mono for numbers. The Matrix Lab is a dark "instrument" panel
@@ -357,6 +357,16 @@ details.fold[open] > summary { margin-bottom: 8px; }
 /* ---------- progress page ---------- */
 .nav-badge { font-family: var(--mono); font-size: .68rem; color: var(--accent); margin-left: 4px; }
 .progress-shell { max-width: 820px; margin: 8px auto 0; }
+
+.about-shell { max-width: 820px; margin: 8px auto 0; }
+.about-head { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+.about-tile { flex: 1 1 200px; }
+.about-tile h3 { color: var(--ink-2); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+.about-tile p { margin: 4px 0 0; font-family: var(--serif); font-size: 1.15rem; font-weight: 600; color: var(--ink); }
+.about-subhead { font-family: var(--serif); font-size: 1rem; font-weight: 600; margin: 0 0 10px; }
+.member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.member-card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+.member-name { font-family: var(--sans); font-size: .92rem; color: var(--ink); }
 .prog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
 .prog-head h2 { font-family: var(--serif); font-weight: 600; margin: 0 0 4px; }
 .prog-sub { margin: 0; color: var(--ink-2); font-size: .92rem; }

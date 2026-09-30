@@ -18,6 +18,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("nav-lessons").addEventListener("click", () => showPage("lessons"));
   document.getElementById("nav-simulator").addEventListener("click", () => showPage("simulator"));
   document.getElementById("nav-progress").addEventListener("click", () => showPage("progress"));
+  document.getElementById("nav-about").addEventListener("click", () => showPage("about"));
 
   initLessons();      // lessons.js
   buildRows();         // circuit-builder.js

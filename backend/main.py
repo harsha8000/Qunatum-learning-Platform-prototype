@@ -1,5 +1,5 @@
 """
-Egreen Quanta backend — FastAPI app tying together the modules that mirror
+Q-Quotient backend — FastAPI app tying together the modules that mirror
 the architecture diagram:
 
   models.py          -> request/response schemas
@@ -24,7 +24,7 @@ from engines import run_on, ENGINES
 import ai_tutor
 import lessons as lessons_module
 
-app = FastAPI(title="Egreen Quanta — Learning Platform Backend")
+app = FastAPI(title="Q-Quotient — Learning Platform Backend")
 
 app.add_middleware(
     CORSMiddleware,
